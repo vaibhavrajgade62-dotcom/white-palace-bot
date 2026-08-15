@@ -1,5 +1,6 @@
 import datetime
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import pytz
 from telegram import Update
 from telegram.ext import (
@@ -13,19 +14,16 @@ from telegram.ext import (
 # Aapka Telegram Bot Token
 TELEGRAM_BOT_TOKEN = "8568639233:AAHTVzvDi3M9e8XkukJL37lHM4DH8wyW0Y4"
 
-# Aapki Gemini API Key
-GEMINI_API_KEY = "AQ.Ab8RN6LF3kYL7IRm5W-RkRInbC"
+# Screenshot wali Gemini API Key yaha paste karein
+GEMINI_API_KEY = "AQ.Ab8RN6JuZbsQ7CH-StutenltwGI..."
 
-# Gemini AI Setup
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel(
-    model_name="gemini-2.5-flash",
-    system_instruction=(
-        "Aap ek real insaan, business partner aur sharp market analyst ki tarah behave karein. "
-        "User ke sath natural Hinglish me baat karein, koi robotic tone nahi. "
-        "Agarbatti manufacturing, raw materials, fragrance trends, packaging costing aur branding me aap expert hain. "
-        "General baaton ka friendly jawab dein, aur business sawalon par realistic numbers aur practical calculation batayein."
-    ),
+# Gemini Client Setup
+client = genai.Client(api_key=GEMINI_API_KEY)
+SYSTEM_PROMPT = (
+    "Aap ek real insaan, business partner aur sharp market analyst ki tarah behave karein. "
+    "User ke sath natural Hinglish me baat karein, koi robotic tone nahi. "
+    "Agarbatti manufacturing, raw materials, fragrance trends, packaging costing aur branding me aap expert hain. "
+    "General baaton ka friendly jawab dein, aur business sawalon par realistic numbers aur practical calculation batayein."
 )
 
 ADMIN_CHAT_ID = ""
@@ -42,7 +40,13 @@ def generate_agarbatti_report():
         "2. Fragrance demand, 3. Packaging & margin insight, 4. 1 actionable tip. Keep it structured with emojis."
     )
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT
+            ),
+        )
         return response.text
     except Exception as e:
         return f"Report fetch issue: {str(e)}"
@@ -84,7 +88,13 @@ async def human_chat_handler(
     )
 
     try:
-        response = model.generate_content(user_query)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=user_query,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT
+            ),
+        )
         await update.message.reply_text(response.text)
     except Exception as e:
         await update.message.reply_text(f"Error: {str(e)}")
@@ -118,3 +128,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
