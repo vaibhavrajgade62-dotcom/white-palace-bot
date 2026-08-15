@@ -1,4 +1,6 @@
+import asyncio
 import datetime
+from aiohttp import web
 from google import genai
 from google.genai import types
 import pytz
@@ -11,13 +13,11 @@ from telegram.ext import (
     filters,
 )
 
-# Aapka Telegram Bot Token
+# Tokens
 TELEGRAM_BOT_TOKEN = "8568639233:AAHTVzvDi3M9e8XkukJL37lHM4DH8wyW0Y4"
+GEMINI_API_KEY = "APNI_GEMINI_API_KEY_YAHA_DAALEIN"
 
-# Screenshot wali Gemini API Key yaha paste karein
-GEMINI_API_KEY = "AQ.Ab8RN6JuZbsQ7CH-StutenltwGI..."
-
-# Gemini Client Setup
+# Gemini Setup
 client = genai.Client(api_key=GEMINI_API_KEY)
 SYSTEM_PROMPT = (
     "Aap ek real insaan, business partner aur sharp market analyst ki tarah behave karein. "
@@ -52,7 +52,7 @@ def generate_agarbatti_report():
         return f"Report fetch issue: {str(e)}"
 
 
-# /start command
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global ADMIN_CHAT_ID
     ADMIN_CHAT_ID = str(update.effective_chat.id)
@@ -66,7 +66,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
 
-# /report command
+# /report
 async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(
         chat_id=update.effective_chat.id, action="typing"
@@ -100,14 +100,32 @@ async def human_chat_handler(
         await update.message.reply_text(f"Error: {str(e)}")
 
 
-# Scheduled 9:00 PM Daily Push
+# 9 PM Scheduled Push
 async def send_daily_update(context: ContextTypes.DEFAULT_TYPE):
     if ADMIN_CHAT_ID:
         report = generate_agarbatti_report()
         await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=report)
 
 
-def main():
+# Dummy Web Server for Render Port Check
+async def health_check(request):
+    return web.Response(text="Bot is running active!")
+
+
+async def run_web_server():
+    app = web.Application()
+    app.router.add_get("/", health_check)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", 10000)
+    await site.start()
+
+
+async def main():
+    # Start web server for Render
+    await run_web_server()
+
+    # Start Telegram Bot
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -123,9 +141,14 @@ def main():
     if job_queue:
         job_queue.run_daily(send_daily_update, time=target_time)
 
-    app.run_polling()
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+
+    # Keep alive
+    while True:
+        await asyncio.sleep(3600)
 
 
 if __name__ == "__main__":
-    main()
-    
+    asyncio.run(main())
