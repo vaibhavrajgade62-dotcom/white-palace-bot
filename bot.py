@@ -1,10 +1,10 @@
-import datetime
+ import datetime
 import pytz
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# Apna Telegram Bot Token yaha dalein
-BOT_TOKEN = "APNA_BOT_TOKEN_YAHA_DALEIN"
+# Aapka Telegram Bot Token
+BOT_TOKEN = "8568639233:AAHTVzvDi3M9e8XkukJL37lHM4DH8wyW0Y4"
 
 # Telegram Chat ID (pehle /start karein bot ID print karega)
 ADMIN_CHAT_ID = ""
@@ -85,4 +85,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
