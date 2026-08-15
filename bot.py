@@ -1,4 +1,5 @@
 import datetime
+import google.generativeai as genai
 import pytz
 from telegram import Update
 from telegram.ext import (
@@ -9,105 +10,106 @@ from telegram.ext import (
     filters,
 )
 
-# Aapka Telegram Bot Token
-BOT_TOKEN = "8568639233:AAHTVzvDi3M9e8XkukJL37lHM4DH8wyW0Y4"
+# Tokens
+TELEGRAM_BOT_TOKEN = "8568639233:AAHTVzvDi3M9e8XkukJL37lHM4DH8wyW0Y4"
+GEMINI_API_KEY = "APNI_GEMINI_API_KEY_YAHA_DAALEIN"
 
-# Daily auto-report ke liye chat ID
+# Gemini Brain Setup (Natural, Human-like Business Advisor)
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel(
+    model_name="gemini-2.5-flash",
+    system_instruction=(
+        "Aap ek real insaan, business partner aur sharp market analyst ki tarah behave karein. "
+        "User ke sath natural Hinglish me baat karein, koi robotic tone nahi. "
+        "Agarbatti manufacturing, raw materials, fragrance trends, packaging costing aur branding me aap expert hain. "
+        "General baaton ka warm, friendly aur witty jawab dein, aur business sawalon par realistic numbers aur practical calculation batayein."
+    ),
+)
+
 ADMIN_CHAT_ID = ""
 
 
+# Daily Market Report Generator
 def generate_agarbatti_report():
     today_str = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime(
         "%d %B %Y"
     )
-    report = f"""📊 *DAILY AGARBATTI INDUSTRY & MARKET DIGEST*
-📅 *Date:* {today_str} | *Time:* 09:00 PM IST
-
-━━━━━━━━━━━━━━━━━━━━━
-🌿 *1. RAW MATERIAL & COST TRENDS*
-• *Bamboo Sticks (8" / 9"):* ₹115 – ₹130 / kg (Supply stable).
-• *Jigat Powder (Quality A):* ₹65 – ₹80 / kg.
-• *Charcoal Powder / Sawdust:* ₹18 – ₹28 / kg.
-• *DEP Oil (Carrier):* ₹140 – ₹160 / kg.
-• *Raw Agarbatti (Count ~950-1000):* ₹72 – ₹85 / kg.
-
-🌸 *2. FRAGRANCE & CONSUMER DEMAND*
-• *Top Scents:* Sandalwood, Rose, Mogra, Lavender, Sambrani Dhoop.
-• *Trending:* Citronella (Mosquito repellent demand), Flora Bathi.
-• *Dipping Target Ratio:* 1:3 ya 1:4 (Perfume : DEP).
-
-📦 *3. PACKAGING & RETAIL MARGIN ANALYSIS*
-• *Zipper Pouches (150g - 250g):* Maximum volume retail driver.
-• *Box Packaging (₹10 / ₹20 MRP):* High turnover in retail/kirana.
-• *Estimated Manufacturing Cost:* ₹140 – ₹180 / kg.
-• *Wholesale Selling Price:* ₹220 – ₹280 / kg.
-• *Average Gross Margin:* 30% – 45%.
-
-━━━━━━━━━━━━━━━━━━━━━
-💡 *Daily Tip:* Check dipping absorption percentage daily to prevent scent leakage and weight variance.
-"""
-    return report
+    prompt = (
+        f"Generate a sharp, realistic Daily Agarbatti Business & Market Analysis for date {today_str}. "
+        "Include: 1. Raw Material Trends (Bamboo sticks, DEP, powders), "
+        "2. Fragrance & Dipping demand trends, "
+        "3. Packaging & margin insight, "
+        "4. 1 actionable ground tip for growth. Use clean formatting and emojis."
+    )
+    try:
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        return f"Report ready karne me issue aaya: {str(e)}"
 
 
 # /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id
     global ADMIN_CHAT_ID
-    ADMIN_CHAT_ID = str(chat_id)
+    ADMIN_CHAT_ID = str(update.effective_chat.id)
 
     welcome_text = (
-        f"🙏 *Namaste! White Palace AI Assistant Active hai!*\n\n"
-        f"Aapki Chat ID register ho gayi hai: `{chat_id}`\n\n"
-        f"• Roz sham *9:00 PM* par auto research update yahi milega.\n"
-        f"• Agarbatti report dekhne ke liye type karein: /report\n"
-        f"• Aap mujhse koi bhi sawal ya baat kar sakte hain!"
+        "Namaste! 👋 Main live hoon aur aapke business ke sath ready hoon.\n\n"
+        "• Mujhse normal insaan ki tarah koi bhi baat, calculation ya strategy discuss karein.\n"
+        "• Roz shaam *9:00 PM* par market update main khud bhejunga.\n"
+        "• Abhi market digest dekhne ke liye: /report"
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
 
 # /report command
 async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await context.bot.send_chat_action(
+        chat_id=update.effective_chat.id, action="typing"
+    )
     report = generate_agarbatti_report()
-    await update.message.reply_text(report, parse_mode="Markdown")
+    await update.message.reply_text(report)
 
 
-# Normal chat reply handler (baat karne ke liye)
-async def chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_msg = update.message.text.lower()
+# Real-time Human-like Chat Handler
+async def human_chat_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+):
+    global ADMIN_CHAT_ID
+    ADMIN_CHAT_ID = str(update.effective_chat.id)
 
-    if "agarbatti" in user_msg or "rate" in user_msg or "cost" in user_msg:
-        reply = (
-            "Agarbatti raw material aur market report dekhne ke liye /report command dabayein, "
-            "ya mujhe specific item ka naam batayein (jaise bamboo stick, DEP oil, fragrance)."
+    user_query = update.message.text
+    await context.bot.send_chat_action(
+        chat_id=update.effective_chat.id, action="typing"
+    )
+
+    try:
+        response = model.generate_content(user_query)
+        await update.message.reply_text(response.text)
+    except Exception as e:
+        await update.message.reply_text(
+            f"Bhai ek second rukna, network issue: {str(e)}"
         )
-    elif "kaise ho" in user_msg or "hello" in user_msg or "hi" in user_msg:
-        reply = "Main bilkul badiya hun! Batao aaj business ya research me kya help chahiye?"
-    else:
-        reply = f"Aapka message mil gaya: '{update.message.text}'. Main aapke sawal par research update ready kar raha hun. Latest market update ke liye /report type karein."
-
-    await update.message.reply_text(reply)
 
 
-# Roz sham 9 PM auto message
+# Daily 9:00 PM Scheduled Push Update
 async def send_daily_update(context: ContextTypes.DEFAULT_TYPE):
     if ADMIN_CHAT_ID:
         report = generate_agarbatti_report()
-        await context.bot.send_message(
-            chat_id=ADMIN_CHAT_ID, text=report, parse_mode="Markdown"
-        )
+        await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=report)
 
 
 def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
-    # Commands & Chat Handlers
+    # Commands & Chat Listener
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("report", report_command))
     app.add_handler(
-        MessageHandler(filters.TEXT & (~filters.COMMAND), chat_handler)
+        MessageHandler(filters.TEXT & (~filters.COMMAND), human_chat_handler)
     )
 
-    # 9:00 PM IST Timer
+    # 9:00 PM IST Timer Setup
     tz = pytz.timezone("Asia/Kolkata")
     target_time = datetime.time(hour=21, minute=0, second=0, tzinfo=tz)
 
@@ -120,4 +122,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
  
