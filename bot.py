@@ -18,15 +18,38 @@ from telegram.ext import (
 TELEGRAM_BOT_TOKEN = "8568639233:AAHTVzvDi3M9e8XkukJL37lHM4DH8wyW0Y4"
 GEMINI_API_KEY = "AQ.Ab8RN6LF3kYL7IRm5W-RkRlnbCJQHrfGeNJ3DPWClzR9504rmg"
 
-# Gemini Modern Client Setup
+# Gemini Client Setup
 client = genai.Client(api_key=GEMINI_API_KEY)
 SYSTEM_PROMPT = (
     "Aap ek real human business partner aur sharp agarbatti market advisor hain. "
     "User ke sath natural, warm Hinglish me normal insaan ki tarah baat karein. "
-    "Costing, raw materials (bamboo, DEP, fragrance), packaging aur business growth tips par realistic aur accurate calculations dein."
+    "Costing, raw materials (bamboo, DEP, fragrance), packaging aur business growth tips par realistic calculations aur strategies dein."
 )
 
 ADMIN_CHAT_ID = ""
+
+
+# AI Response Generator (Auto-fallback to stable models)
+def call_gemini(prompt_text):
+    models_to_try = [
+        "gemini-1.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-pro",
+    ]
+    for model_name in models_to_try:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt_text,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT
+                ),
+            )
+            if response and response.text:
+                return response.text
+        except Exception:
+            continue
+    return "Market update fetch nahi ho paya, kripya thodi der baad try karein."
 
 
 # Daily Market Report Generator
@@ -40,17 +63,7 @@ def generate_agarbatti_report():
         "2. Fragrance demand & dipping ratios, "
         "3. Packaging & margin insight, 4. 1 actionable tip. Keep it structured with emojis."
     )
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT
-            ),
-        )
-        return response.text
-    except Exception as e:
-        return f"Report fetch issue: {str(e)}"
+    return call_gemini(prompt)
 
 
 # /start command
@@ -76,7 +89,7 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(report)
 
 
-# Real-time Human Chat Handler
+# Chat Handler
 async def human_chat_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ):
@@ -89,14 +102,8 @@ async def human_chat_handler(
     )
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=user_query,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT
-            ),
-        )
-        await update.message.reply_text(response.text)
+        reply = call_gemini(user_query)
+        await update.message.reply_text(reply)
     except Exception as e:
         await update.message.reply_text(f"Error: {str(e)}")
 
@@ -108,7 +115,7 @@ async def send_daily_update(context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=report)
 
 
-# Web Server to satisfy Render Port Binding
+# Web Server for Render Port Check
 async def handle_ping(request):
     return web.Response(text="Bot is running active!")
 
@@ -150,3 +157,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+                
