@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import os
 from aiohttp import web
 from google import genai
 from google.genai import types
@@ -15,21 +16,20 @@ from telegram.ext import (
 
 # Tokens
 TELEGRAM_BOT_TOKEN = "8568639233:AAHTVzvDi3M9e8XkukJL37lHM4DH8wyW0Y4"
-GEMINI_API_KEY = "APNI_GEMINI_API_KEY_YAHA_DAALEIN"
+GEMINI_API_KEY = "AQ.Ab8RN6LF3kYL7IRm5W-RkRlnbCJQHrfGeNJ3DPWClzR9504rmg"
 
-# Gemini Setup
+# Gemini Modern Client Setup
 client = genai.Client(api_key=GEMINI_API_KEY)
 SYSTEM_PROMPT = (
-    "Aap ek real insaan, business partner aur sharp market analyst ki tarah behave karein. "
-    "User ke sath natural Hinglish me baat karein, koi robotic tone nahi. "
-    "Agarbatti manufacturing, raw materials, fragrance trends, packaging costing aur branding me aap expert hain. "
-    "General baaton ka friendly jawab dein, aur business sawalon par realistic numbers aur practical calculation batayein."
+    "Aap ek real human business partner aur sharp agarbatti market advisor hain. "
+    "User ke sath natural, warm Hinglish me normal insaan ki tarah baat karein. "
+    "Costing, raw materials (bamboo, DEP, fragrance), packaging aur business growth tips par realistic aur accurate calculations dein."
 )
 
 ADMIN_CHAT_ID = ""
 
 
-# Daily Market Report
+# Daily Market Report Generator
 def generate_agarbatti_report():
     today_str = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime(
         "%d %B %Y"
@@ -37,7 +37,8 @@ def generate_agarbatti_report():
     prompt = (
         f"Generate a sharp Daily Agarbatti Business & Market Analysis for date {today_str}. "
         "Include: 1. Raw Material Trends (Bamboo sticks, DEP, powders), "
-        "2. Fragrance demand, 3. Packaging & margin insight, 4. 1 actionable tip. Keep it structured with emojis."
+        "2. Fragrance demand & dipping ratios, "
+        "3. Packaging & margin insight, 4. 1 actionable tip. Keep it structured with emojis."
     )
     try:
         response = client.models.generate_content(
@@ -52,21 +53,21 @@ def generate_agarbatti_report():
         return f"Report fetch issue: {str(e)}"
 
 
-# /start
+# /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global ADMIN_CHAT_ID
     ADMIN_CHAT_ID = str(update.effective_chat.id)
 
     welcome_text = (
         "Namaste! 👋 Main live hoon aur aapke business ke sath ready hoon.\n\n"
-        "• Mujhse normal insaan ki tarah koi bhi sawal ya calculation pucho.\n"
+        "• Normal insaan ki tarah mujhse koi bhi sawal ya calculation pucho.\n"
         "• Roz shaam *9:00 PM* par market update main khud bhejunga.\n"
         "• Abhi market report dekhne ke liye: /report"
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
 
-# /report
+# /report command
 async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(
         chat_id=update.effective_chat.id, action="typing"
@@ -75,7 +76,7 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(report)
 
 
-# Chat Handler
+# Real-time Human Chat Handler
 async def human_chat_handler(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ):
@@ -100,34 +101,32 @@ async def human_chat_handler(
         await update.message.reply_text(f"Error: {str(e)}")
 
 
-# 9 PM Scheduled Push
+# Scheduled 9:00 PM Daily Push
 async def send_daily_update(context: ContextTypes.DEFAULT_TYPE):
     if ADMIN_CHAT_ID:
         report = generate_agarbatti_report()
         await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=report)
 
 
-# Dummy Web Server for Render Port Check
-async def health_check(request):
+# Web Server to satisfy Render Port Binding
+async def handle_ping(request):
     return web.Response(text="Bot is running active!")
 
 
 async def run_web_server():
-    app = web.Application()
-    app.router.add_get("/", health_check)
-    runner = web.AppRunner(app)
+    server = web.Application()
+    server.router.add_get("/", handle_ping)
+    port = int(os.environ.get("PORT", 10000))
+    runner = web.AppRunner(server)
     await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", 10000)
+    site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
 
 
 async def main():
-    # Start web server for Render
     await run_web_server()
 
-    # Start Telegram Bot
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("report", report_command))
     app.add_handler(
@@ -145,7 +144,6 @@ async def main():
     await app.start()
     await app.updater.start_polling()
 
-    # Keep alive
     while True:
         await asyncio.sleep(3600)
 
