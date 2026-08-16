@@ -1,9 +1,8 @@
 import asyncio
 import datetime
 import os
+import aiohttp
 from aiohttp import web
-from google import genai
-from google.genai import types
 import pytz
 from telegram import Update
 from telegram.ext import (
@@ -14,56 +13,46 @@ from telegram.ext import (
     filters,
 )
 
-# Tokens
+# Aapke Tokens
 TELEGRAM_BOT_TOKEN = "8568639233:AAHTVzvDi3M9e8XkukJL37lHM4DH8wyW0Y4"
 GEMINI_API_KEY = "AQ.Ab8RN6LF3kYL7IRm5W-RkRlnbCJQHrfGeNJ3DPWClzR9504rmg"
 
-# Gemini Client Setup
-client = genai.Client(api_key=GEMINI_API_KEY)
 SYSTEM_PROMPT = (
     "Aap ek real human business partner aur sharp agarbatti market advisor hain. "
-    "User ke sath natural, warm Hinglish me normal insaan ki tarah baat karein. "
-    "Costing, raw materials (bamboo, DEP, fragrance), packaging aur business growth tips par realistic calculations aur strategies dein."
+    "User ke sath natural, warm Hinglish me baat karein. "
+    "Costing, raw materials (bamboo, DEP, fragrance), packaging aur business growth tips par realistic calculations dein."
 )
 
 ADMIN_CHAT_ID = ""
 
 
-# AI Response Generator (Auto-fallback to stable models)
-def call_gemini(prompt_text):
-    models_to_try = [
-        "gemini-1.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-pro",
-    ]
-    for model_name in models_to_try:
-        try:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt_text,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_PROMPT
-                ),
-            )
-            if response and response.text:
-                return response.text
-        except Exception:
-            continue
-    return "Market update fetch nahi ho paya, kripya thodi der baad try karein."
+# Direct Google Gemini REST API Call
+async def ask_gemini_direct(prompt_text):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    payload = {
+        "contents": [{"parts": [{"text": prompt_text}]}],
+        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+    }
+    headers = {"Content-Type": "application/json"}
 
-
-# Daily Market Report Generator
-def generate_agarbatti_report():
-    today_str = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime(
-        "%d %B %Y"
-    )
-    prompt = (
-        f"Generate a sharp Daily Agarbatti Business & Market Analysis for date {today_str}. "
-        "Include: 1. Raw Material Trends (Bamboo sticks, DEP, powders), "
-        "2. Fragrance demand & dipping ratios, "
-        "3. Packaging & margin insight, 4. 1 actionable tip. Keep it structured with emojis."
-    )
-    return call_gemini(prompt)
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                url, json=payload, headers=headers, timeout=20
+            ) as resp:
+                data = await resp.json()
+                if (
+                    "candidates" in data
+                    and len(data["candidates"]) > 0
+                    and "content" in data["candidates"][0]
+                ):
+                    return data["candidates"][0]["content"]["parts"][0]["text"]
+                elif "error" in data:
+                    return f"API Error: {data['error'].get('message', 'Key issue')}"
+                else:
+                    return "Bhai, report process nahi ho saki. Dobara try karein."
+    except Exception as e:
+        return f"Connection issue: {str(e)}"
 
 
 # /start command
@@ -85,8 +74,17 @@ async def report_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(
         chat_id=update.effective_chat.id, action="typing"
     )
-    report = generate_agarbatti_report()
-    await update.message.reply_text(report)
+    today_str = datetime.datetime.now(pytz.timezone("Asia/Kolkata")).strftime(
+        "%d %B %Y"
+    )
+    prompt = (
+        f"Generate a sharp Daily Agarbatti Business & Market Analysis for date {today_str}. "
+        "Include: 1. Raw Material Trends (Bamboo sticks, DEP, powders), "
+        "2. Fragrance demand & dipping ratios, "
+        "3. Packaging & margin insight, 4. 1 actionable tip. Keep it structured with emojis."
+    )
+    reply = await ask_gemini_direct(prompt)
+    await update.message.reply_text(reply)
 
 
 # Chat Handler
@@ -101,21 +99,22 @@ async def human_chat_handler(
         chat_id=update.effective_chat.id, action="typing"
     )
 
-    try:
-        reply = call_gemini(user_query)
-        await update.message.reply_text(reply)
-    except Exception as e:
-        await update.message.reply_text(f"Error: {str(e)}")
+    reply = await ask_gemini_direct(user_query)
+    await update.message.reply_text(reply)
 
 
-# Scheduled 9:00 PM Daily Push
+# 9:00 PM Auto Send
 async def send_daily_update(context: ContextTypes.DEFAULT_TYPE):
     if ADMIN_CHAT_ID:
-        report = generate_agarbatti_report()
+        today_str = datetime.datetime.now(
+            pytz.timezone("Asia/Kolkata")
+        ).strftime("%d %B %Y")
+        prompt = f"Generate a sharp Daily Agarbatti Market Analysis for {today_str}."
+        report = await ask_gemini_direct(prompt)
         await context.bot.send_message(chat_id=ADMIN_CHAT_ID, text=report)
 
 
-# Web Server for Render Port Check
+# Port Server for Render
 async def handle_ping(request):
     return web.Response(text="Bot is running active!")
 
@@ -157,4 +156,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-                
